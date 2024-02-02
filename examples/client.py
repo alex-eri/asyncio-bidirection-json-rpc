@@ -16,7 +16,7 @@ async def main():
     client = await protocol.get_rpc_client()
 
     print('client.hello', await client.hello())
-    print('client.ping', await client.ping())
+    print('client.ping', await client.generate_204())
     try:
         await client.knownerror()
     except Exception as e:

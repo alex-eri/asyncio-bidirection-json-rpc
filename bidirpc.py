@@ -5,6 +5,24 @@ import itertools
 import msgpack
 import builtins
 
+from enum import IntEnum, auto
+
+class Pk(IntEnum):
+    TYPE = auto()
+    PING = auto()
+    PONG = auto()
+    CALL = auto()
+    NOTIFY = auto()
+    ARGS = auto()
+    PARAMS = auto()
+    METHOD = auto()
+    ID = auto()
+    RETURN = auto()
+    RESULT = auto()
+    ERROR = auto()
+    EXCEPTION = auto()
+
+
 class UnnownException(Exception):
     def __init__(self, *a, __name__='UnnownException'):
         super().__init__(*a)
@@ -15,7 +33,7 @@ class UnnownException(Exception):
 
 
 class Server():
-    async def ping(self, client, *a, **kw):
+    async def generate_204(self, client, *a, **kw):
         return 204
 
 class Client():
@@ -38,23 +56,33 @@ class Client():
 
 
 class RPCProtocol(asyncio.Protocol):
-    def __init__(self, server=Server, knownerrors=[builtins]):
+    def __init__(self, server=Server, knownerrors=[builtins], keepalive=10):
         self._server = server()
         self._head = b''
         self._results = {}
         self._client = asyncio.Future()
         self._client_factory = Client
         self._id = itertools.count(1)
-        self.unpacker = msgpack.Unpacker()
+        self.unpacker = msgpack.Unpacker(strict_map_key=False)
         self.knownerrors = knownerrors
+        self.keepalive = keepalive
+
 
     def get_rpc_client(self):
         return self._client
 
+    def ping_send(self):
+        if self.keepalive:
+            self.message_send({Pk.TYPE:Pk.PING})
+            self.keepalive_timer = asyncio.get_running_loop().call_later(
+                self.keepalive, 
+                self.ping_send
+            )
+
     def connection_made(self, transport):
         self.transport = transport
         self._client.set_result(self._client_factory(self))
-
+        self.ping_send()
 
     def data_received(self, data):
         self.unpacker.feed(data)
@@ -62,43 +90,50 @@ class RPCProtocol(asyncio.Protocol):
             asyncio.create_task(self.process(message))
         
     async def process(self, message):
-        match message['type']:
-            case 'call'|'notify':
+        match message[Pk.TYPE]:
+            case Pk.CALL|Pk.NOTIFY:
                 try:
-                    result = getattr(self._server, message['method'])(
+                    result = getattr(self._server, message[Pk.METHOD])(
                         (await self._client),
-                        *message.get('args',[]),
-                        **message.get('params', {})
+                        *message.get(Pk.ARGS,[]),
+                        **message.get(Pk.PARAMS, {})
                     )
                     if asyncio.iscoroutine(result):
                         result = await result
-                    if message['type'] == 'call':
-                        self.return_send(result, message['id'])
+                    if message[Pk.TYPE] == Pk.CALL:
+                        self.return_send(result, message[Pk.ID])
                 except Exception as e:
-                    self.error_send(e, message['id'])
+                    self.error_send(e, message[Pk.ID])
             
-            case 'return':
-                self._results[message['id']].set_result(message['result'])
+            case Pk.RETURN:
+                self._results[message[Pk.ID]].set_result(message[Pk.RESULT])
             
-            case 'error':
+            case Pk.ERROR:
                 for module in self.knownerrors:
-                    if hasattr(module, message['exception'][0]):
-                        typ = getattr(module, message['exception'][0])
+                    if hasattr(module, message[Pk.EXCEPTION][0]):
+                        typ = getattr(module, message[Pk.EXCEPTION][0])
                         if issubclass(typ, BaseException):
-                            e = typ(*message['exception'][1])
+                            e = typ(*message[Pk.EXCEPTION][1])
                             break
                 else:
-                    e = UnnownException(*message['exception'][1], __name__=message['exception'][0])
-                self._results[message['id']].set_exception(e)
+                    e = UnnownException(*message[Pk.EXCEPTION][1], __name__=message[Pk.EXCEPTION][0])
+                self._results[message[Pk.ID]].set_exception(e)
+            
+            case Pk.PING:
+                self.message_send({
+                    Pk.TYPE: Pk.PONG
+                })
+            case Pk.PONG:
+                pass
 
 
     def notify_run(self, method, args, params):
         result = asyncio.Future()
         message = {
-            'type': 'notify',
-            'method': method,
-            'args': args,
-            'params': params,
+            Pk.TYPE: Pk.NOTIFY,
+            Pk.METHOD: method,
+            Pk.ARGS: args,
+            Pk.PARAMS: params,
         }
         self.message_send(message)
         return result       
@@ -106,22 +141,22 @@ class RPCProtocol(asyncio.Protocol):
     def call_run(self, method, args, params):
         result = asyncio.Future()
         message = {
-            'type': 'call',
-            'method': method,
-            'args': args,
-            'params': params,
-            'id': next(self._id)
+            Pk.TYPE: Pk.CALL,
+            Pk.METHOD: method,
+            Pk.ARGS: args,
+            Pk.PARAMS: params,
+            Pk.ID: next(self._id)
         }
-        self._results[message['id']] = result
+        self._results[message[Pk.ID]] = result
         self.message_send(message)
         return result
 
     def return_send(self, result, _id):
-        message = {'type':'return','result': result, 'id':_id}
+        message = {Pk.TYPE:Pk.RETURN,Pk.RESULT: result, Pk.ID:_id}
         self.message_send(message)
 
     def error_send(self, e, _id):
-        message = {'type':'error','exception': (type(e).__name__, e.args), 'id':_id}
+        message = {Pk.TYPE:Pk.ERROR,Pk.EXCEPTION: (type(e).__name__, e.args), Pk.ID:_id}
         self.message_send(message)
 
     def message_send(self, message):

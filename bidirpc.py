@@ -10,6 +10,10 @@ class UnnownException(Exception):
         super().__init__(*a)
         self.__name__ = __name__
 
+    def __repr__(self) -> str:
+        return f'{self.__name__}<UnnownException>({", ".join(repr(a) for a in self.args)})'
+
+
 class Server():
     async def ping(self, client, *a, **kw):
         return 204
@@ -19,7 +23,7 @@ class Client():
         self.protocol = protocol
 
     def __getattribute__(self, __name: str) -> Any:
-        if __name in ["notify","call","protocol"]:
+        if __name in ["notify", "call", "protocol", "__call__"]:
             return super().__getattribute__(__name)
         return functools.partial(self, __name)
 
@@ -84,7 +88,7 @@ class RPCProtocol(asyncio.Protocol):
                             e = typ(*message['exception'][1])
                             break
                 else:
-                    e = UnnownException(*message['exception'][1])
+                    e = UnnownException(*message['exception'][1], __name__=message['exception'][0])
                 self._results[message['id']].set_exception(e)
 
 

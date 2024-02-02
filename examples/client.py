@@ -8,10 +8,7 @@ class Server():
         return data
 
 async def main():
-    # Get a reference to the event loop as we plan to use
-    # low-level APIs.
     loop = asyncio.get_running_loop()
-
     transport, protocol = await loop.create_connection(
         lambda: bidirpc.RPCProtocol(Server),
         '127.0.0.1', 8888)
@@ -28,6 +25,7 @@ async def main():
     try:
         await client.unknownerror()
     except Exception as e:
+        print('client.error.name', e.__name__)
         print('client.error', repr(e))
 
 asyncio.run(main())

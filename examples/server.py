@@ -1,6 +1,8 @@
 import asyncio
 import bidirpc
 
+class ServerUnknownError(Exception):
+    pass
 
 class Server(bidirpc.Server):
     async def hello(self, client, *a, **kw):
@@ -14,15 +16,13 @@ class Server(bidirpc.Server):
     def knownerror(self, client):
         raise AssertionError('hello')
 
+    def unknownerror(self, client):
+        raise ServerUnknownError('^')
+
 async def main():
-    # Get a reference to the event loop as we plan to use
-    # low-level APIs.
     loop = asyncio.get_running_loop()
-
-    rpcserver = Server
-
     server = await loop.create_server(
-        lambda: bidirpc.RPCProtocol(rpcserver),
+        lambda: bidirpc.RPCProtocol(Server),
         '127.0.0.1', 8888)
 
     async with server:

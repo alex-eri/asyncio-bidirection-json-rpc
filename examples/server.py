@@ -8,8 +8,11 @@ class Server(bidirpc.Server):
         r = await client.echo('hello')
         return 'hellohello'
 
-    def echo_notify(self,client,data):
+    def echo_notify(self, client, data):
         print('echo_notify', data)
+
+    def knownerror(self, client):
+        raise AssertionError('hello')
 
 async def main():
     # Get a reference to the event loop as we plan to use

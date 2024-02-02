@@ -1,17 +1,21 @@
 import asyncio
-import json
 from typing import Any
-TERMINATOR = b'\0'
 import functools
 import itertools
+import msgpack
+import builtins
+
+class UnnownException(Exception):
+    def __init__(self, *a, __name__='UnnownException'):
+        super().__init__(*a)
+        self.__name__ = __name__
 
 class Server():
-    pass
-    # def echo(self, client, *args, **params):
-    #     return params
+    async def ping(self, client, *a, **kw):
+        return 204
 
 class Client():
-    def __init__(self,protocol):
+    def __init__(self, protocol):
         self.protocol = protocol
 
     def __getattribute__(self, __name: str) -> Any:
@@ -29,19 +33,16 @@ class Client():
         return self.protocol.notify_run(method,args,params)
 
 
-
 class RPCProtocol(asyncio.Protocol):
-    def __init__(self, server=Server, dumps=json.dumps, loads=json.loads, terminator=TERMINATOR):
-        self.dumps = dumps
-        self.loads = loads
-        self.terminator = terminator
+    def __init__(self, server=Server, knownerrors=[builtins]):
         self._server = server()
         self._head = b''
         self._results = {}
         self._client = asyncio.Future()
         self._client_factory = Client
         self._id = itertools.count(1)
-    
+        self.unpacker = msgpack.Unpacker()
+        self.knownerrors = knownerrors
 
     def get_rpc_client(self):
         return self._client
@@ -52,27 +53,40 @@ class RPCProtocol(asyncio.Protocol):
 
 
     def data_received(self, data):
-        self._head += data
-        datas = self._head.split(self.terminator)
-        self._head = datas[-1]
-        for d in datas[:-1]:
-            message = self.loads(d)
+        self.unpacker.feed(data)
+        for message in self.unpacker:
             asyncio.create_task(self.process(message))
         
     async def process(self, message):
-        if message['type'] in ['call', 'notify']:
-            result = getattr(self._server, message['method'])(
-                (await self._client),
-                *message.get('args',[]),
-                **message.get('params', {})
-            )
-            if asyncio.iscoroutine(result):
-                result = await result
-            if message['type'] == 'call':
-                self.return_send(result, message['id'])
-            return
-        if message['type'] == 'return':
-            self._results[message['id']].set_result(message['result'])
+        match message['type']:
+            case 'call'|'notify':
+                try:
+                    result = getattr(self._server, message['method'])(
+                        (await self._client),
+                        *message.get('args',[]),
+                        **message.get('params', {})
+                    )
+                    if asyncio.iscoroutine(result):
+                        result = await result
+                    if message['type'] == 'call':
+                        self.return_send(result, message['id'])
+                except Exception as e:
+                    self.error_send(e, message['id'])
+            
+            case 'return':
+                self._results[message['id']].set_result(message['result'])
+            
+            case 'error':
+                for module in self.knownerrors:
+                    if hasattr(module, message['exception'][0]):
+                        typ = getattr(module, message['exception'][0])
+                        if issubclass(typ, BaseException):
+                            e = typ(*message['exception'][1])
+                            break
+                else:
+                    e = UnnownException(*message['exception'][1])
+                self._results[message['id']].set_exception(e)
+
 
     def notify_run(self, method, args, params):
         result = asyncio.Future()
@@ -84,7 +98,6 @@ class RPCProtocol(asyncio.Protocol):
         }
         self.message_send(message)
         return result       
-
 
     def call_run(self, method, args, params):
         result = asyncio.Future()
@@ -99,16 +112,15 @@ class RPCProtocol(asyncio.Protocol):
         self.message_send(message)
         return result
 
-
-
     def return_send(self, result, _id):
         message = {'type':'return','result': result, 'id':_id}
         self.message_send(message)
 
+    def error_send(self, e, _id):
+        message = {'type':'error','exception': (type(e).__name__, e.args), 'id':_id}
+        self.message_send(message)
+
     def message_send(self, message):
-        data = self.dumps(message)
-        if type(data) == str:
-            data = data.encode()
+        data = msgpack.packb(message)
         self.transport.write(data)
-        self.transport.write(self.terminator)
 

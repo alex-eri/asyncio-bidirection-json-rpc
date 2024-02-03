@@ -36,6 +36,7 @@ class Server():
     async def generate_204(self, client, *a, **kw):
         return 204
 
+
 class Client():
     def __init__(self, protocol):
         self.protocol = protocol

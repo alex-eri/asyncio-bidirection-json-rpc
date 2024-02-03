@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+src/bidirpc.py
+src/asyncio_bidirection_rpc.egg-info/PKG-INFO
+src/asyncio_bidirection_rpc.egg-info/SOURCES.txt
+src/asyncio_bidirection_rpc.egg-info/dependency_links.txt
+src/asyncio_bidirection_rpc.egg-info/top_level.txt

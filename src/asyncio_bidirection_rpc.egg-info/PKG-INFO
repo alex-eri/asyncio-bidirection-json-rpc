@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: asyncio-bidirection-rpc
+Version: 0.0.1
+Summary: Bidirection RPC server with asyncio and msgpack
+Author-email: Stepanov Aleksandr <sa@eri.su>
+Project-URL: Homepage, https://github.com/alex-eri/asyncio-bidirection-rpc
+Project-URL: Issues, https://github.com/alex-eri/asyncio-bidirection-rpc/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
+asyncio-bidirection-rpc
+===
+
+Bidirection RPC server with asyncio and msgpack

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "asyncio-bidirection-rpc"
 version = "0.0.1"
 authors = [
-  { name="Stepanov Aleksandr", email="sa@eri.su" },
+  { name="Stepanov Aleksandr", email="sa+pip@eri.su" },
 ]
 description = "Bidirection RPC server with asyncio and msgpack"
 readme = "README.md"

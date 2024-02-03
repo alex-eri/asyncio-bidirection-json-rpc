@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: asyncio-bidirection-rpc
-Version: 24.2.1
+Version: 24.2.2
 Summary: Bidirection RPC server with asyncio and msgpack
 Author-email: Stepanov Aleksandr <sa+pip@eri.su>
 Project-URL: Homepage, https://github.com/alex-eri/asyncio-bidirection-rpc
